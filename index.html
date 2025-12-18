@@ -542,23 +542,6 @@
     }
   }
 
-  // Hàm hợp nhất dữ liệu (Merge Strategy)
-  function mergeCameraLists(localList, serverList) {
-    const map = new Map();
-    // 1. Đưa dữ liệu server vào map trước
-    serverList.forEach(c => map.set(c.id, c));
-    
-    // 2. Hợp nhất với dữ liệu local
-    localList.forEach(localCam => {
-      const serverCam = map.get(localCam.id);
-      // Nếu local mới hơn hoặc server không có -> Dùng local
-      if (!serverCam || (localCam.updatedAt || 0) >= (serverCam.updatedAt || 0)) {
-        map.set(localCam.id, localCam);
-      }
-    });
-    return Array.from(map.values());
-  }
-
   async function syncToGitHub() {
     const settings = getGitHubSettings();
     
@@ -581,27 +564,6 @@
         alert('Đã hủy đồng bộ');
       };
 
-      // BƯỚC 1: Lấy dữ liệu mới nhất từ Server về trước
-      const getResponse = await fetchWithTimeout(
-        `https://api.github.com/gists/${settings.gistId}`,
-        { headers: { 'Authorization': `token ${settings.token}` } },
-        10000
-      );
-      
-      let serverCameras = [];
-      if (getResponse.ok) {
-        const gist = await getResponse.json();
-        if (gist.files['cameras.json']) {
-          serverCameras = JSON.parse(gist.files['cameras.json'].content || '[]');
-        }
-      }
-
-      // BƯỚC 2: Hợp nhất (Merge)
-      cameras = mergeCameraLists(cameras, serverCameras);
-      saveCameras(); // Lưu lại kết quả hợp nhất vào Local
-      renderMarkers(); renderTable(); updateStats(); // Cập nhật giao diện ngay
-
-      // BƯỚC 3: Đẩy dữ liệu đã hợp nhất lên Server
       const gistContent = JSON.stringify(cameras);
       const requestBody = JSON.stringify({
         files: {
@@ -703,10 +665,6 @@
           if (Array.isArray(data) && data.length > 0) {
             localStorage.setItem(STORAGE_KEYS.cameras, JSON.stringify(data));
             console.log('✓ Dữ liệu đã được tải từ GitHub');
-            // Hợp nhất thay vì ghi đè khi tải trang
-            cameras = mergeCameraLists(cameras, data);
-            saveCameras();
-            console.log('✓ Dữ liệu đã được hợp nhất từ GitHub');
           }
         }
       } else if (response.status === 401) {
@@ -776,9 +734,6 @@
   function updateStats() {
     const total = cameras.length;
     const online = cameras.filter(c => c.status === 'online').length;
-    const activeCameras = cameras.filter(c => !c.deleted);
-    const total = activeCameras.length;
-    const online = activeCameras.filter(c => c.status === 'online').length;
     const offline = total - online;
     document.getElementById('totalCount').textContent = total;
     document.getElementById('onlineCount').textContent = online;
@@ -790,7 +745,6 @@
     const showOnline = document.getElementById('filterOnline').checked;
     const showOffline = document.getElementById('filterOffline').checked;
     cameras.filter(cam => (cam.status === 'online' && showOnline) || (cam.status === 'offline' && showOffline))
-    cameras.filter(cam => !cam.deleted && ((cam.status === 'online' && showOnline) || (cam.status === 'offline' && showOffline)))
       .forEach(cam => {
         const marker = L.marker([cam.lat, cam.lng], { icon: cam.status === 'online' ? onlineIcon : offlineIcon });
         marker.bindPopup(`<b>${cam.name}</b><br>${cam.address}`);
@@ -807,7 +761,6 @@
     tbody.innerHTML = '';
     let rowNum = 1;
     cameras.filter(cam => {
-      if (cam.deleted) return false;
       const matchesSearch = cam.name.toLowerCase().includes(searchTerm) || cam.ip.toLowerCase().includes(searchTerm);
       const matchesStatus = (cam.status === 'online' && showOnline) || (cam.status === 'offline' && showOffline);
       return matchesSearch && matchesStatus;
@@ -845,7 +798,6 @@
     cam.lat = parseFloat(document.getElementById('editLat').value);
     cam.lng = parseFloat(document.getElementById('editLng').value);
     cam.status = document.getElementById('editStatus').value;
-    cam.updatedAt = Date.now(); // Cập nhật thời gian sửa
     saveCameras();
     bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
     renderMarkers(); renderTable(); updateStats();
@@ -884,7 +836,6 @@
 
     const newId = cameras.length ? Math.max(...cameras.map(c => c.id)) + 1 : 1;
     cameras.push({ id: newId, name, ip, address, lat, lng, status });
-    cameras.push({ id: newId, name, ip, address, lat, lng, status, updatedAt: Date.now() });
     saveCameras();
 
     // Reset form
@@ -908,14 +859,6 @@
     cameras = cameras.filter(c => c.id !== id);
     saveCameras();
     renderMarkers(); renderTable(); updateStats();
-    // Xóa mềm (Soft Delete) để đồng bộ được việc xóa
-    const cam = cameras.find(c => c.id === id);
-    if (cam) {
-      cam.deleted = true;
-      cam.updatedAt = Date.now();
-      saveCameras();
-      renderMarkers(); renderTable(); updateStats();
-    }
   }
 
   function addCamera() {
@@ -932,7 +875,6 @@
   function exportCSV() {
     let csv = 'Tên,IP,Địa chỉ,Vĩ độ,Kinh độ,Trạng thái\n';
     cameras.forEach(cam => {
-    cameras.filter(c => !c.deleted).forEach(cam => {
       csv += `"${cam.name}","${cam.ip}","${cam.address}",${cam.lat.toFixed(5)},${cam.lng.toFixed(5)},"${cam.status}"\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -956,7 +898,6 @@
           if (cols.length >= 6) {
             newCameras.push({ id: startId + index, name: cols[0], ip: cols[1], address: cols[2],
               lat: parseFloat(cols[3]), lng: parseFloat(cols[4]), status: cols[5] });
-              lat: parseFloat(cols[3]), lng: parseFloat(cols[4]), status: cols[5], updatedAt: Date.now() });
           }
         }
       });
