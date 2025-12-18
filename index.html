@@ -568,111 +568,111 @@
       return;
     }
 
-    try {
-      const syncBtn = event.target.closest('button');
-      syncAbortController = new AbortController();
+    const syncBtn = document.querySelector('button[onclick="syncToGitHub()"]');
+    const originalContent = syncBtn ? syncBtn.innerHTML : '';
+    
+    if (syncBtn) {
       syncBtn.disabled = true;
-      syncBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Đang sync... <small>(nhấn để hủy)</small>';
-      syncBtn.onclick = () => {
-        syncAbortController.abort();
-        syncBtn.disabled = false;
-        syncBtn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Sync';
-        syncBtn.onclick = syncToGitHub;
-        alert('Đã hủy đồng bộ');
-      };
+      syncBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Đang đồng bộ...';
+    }
 
-      // BƯỚC 1: Lấy dữ liệu mới nhất từ Server về trước
-      const getResponse = await fetchWithTimeout(
-        `https://api.github.com/gists/${settings.gistId}`,
-        { headers: { 'Authorization': `token ${settings.token}` } },
-        10000
-      );
+    try {
+      await performSyncWithRetry(settings, 0);
       
-      let serverCameras = [];
-      if (getResponse.ok) {
-        const gist = await getResponse.json();
-        if (gist.files['cameras.json']) {
-          serverCameras = JSON.parse(gist.files['cameras.json'].content || '[]');
-        }
-      }
-
-      // BƯỚC 2: Hợp nhất (Merge)
-      cameras = mergeCameraLists(cameras, serverCameras);
-      saveCameras(); // Lưu lại kết quả hợp nhất vào Local
-      renderMarkers(); renderTable(); updateStats(); // Cập nhật giao diện ngay
-
-      // BƯỚC 3: Đẩy dữ liệu đã hợp nhất lên Server
-      const gistContent = JSON.stringify(cameras);
-      const requestBody = JSON.stringify({
-        files: {
-          'cameras.json': {
-            content: gistContent
-          }
-        }
-      });
-      
-      console.log('📤 Bắt đầu sync, dữ liệu:', gistContent.length, 'bytes');
-      const startTime = Date.now();
-      
-      const response = await fetchWithTimeout(
-        `https://api.github.com/gists/${settings.gistId}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `token ${settings.token}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
-          },
-          body: requestBody,
-          signal: syncAbortController.signal
-        },
-        30000 // 30 giây timeout - đủ cho dữ liệu lớn
-      );
-
-      console.log('📥 Response status:', response.status);
-
-      if (response.ok) {
-        const elapsed = Date.now() - startTime;
-        syncBtn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Sync';
-        syncBtn.disabled = false;
-        syncBtn.onclick = syncToGitHub;
-        console.log(`✓ Sync thành công trong ${elapsed}ms`);
-        
-        // Thông báo thành công rõ ràng
-        const notif = document.createElement('div');
-        notif.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 15px 20px; border-radius: 4px; font-size: 14px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.2);';
-        notif.innerHTML = `<i class="bi bi-check-circle"></i> Sync thành công!<br><small>${cameras.length} camera (${(gistContent.length/1024).toFixed(1)} KB)</small>`;
-        document.body.appendChild(notif);
-        setTimeout(() => notif.remove(), 4000);
-      } else if (response.status === 401) {
-        throw new Error('Token không hợp lệ hoặc đã hết hạn');
-      } else if (response.status === 404) {
-        throw new Error('Gist ID không tìm thấy');
-      } else {
-        throw new Error('HTTP ' + response.status + ' ' + response.statusText);
-      }
+      // Thông báo thành công
+      const notif = document.createElement('div');
+      notif.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 15px 20px; border-radius: 4px; font-size: 14px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.2);';
+      notif.innerHTML = `<i class="bi bi-check-circle"></i> Đồng bộ thành công!`;
+      document.body.appendChild(notif);
+      setTimeout(() => notif.remove(), 4000);
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.log('✓ Sync đã bị hủy');
-        syncBtn.disabled = false;
-        syncBtn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Sync';
-        syncBtn.onclick = syncToGitHub;
-        return;
-      }
-      console.error('❌ Lỗi sync chi tiết:', error);
-      const btn = event.target.closest('button');
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Sync';
-      btn.onclick = syncToGitHub;
-      
-      // Hiển thị lỗi rõ ràng
-      const errorNotif = document.createElement('div');
-      errorNotif.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #dc3545; color: white; padding: 15px 20px; border-radius: 4px; font-size: 14px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.2); max-width: 300px;';
-      errorNotif.innerHTML = `<i class="bi bi-exclamation-circle"></i> <strong>Sync thất bại</strong><br><small>${error.message}</small><br><small style="opacity:0.8;">Kiểm tra: Token hợp lệ? Gist ID đúng?</small>`;
-      document.body.appendChild(errorNotif);
-      setTimeout(() => errorNotif.remove(), 5000);
-      
+      console.error('Sync error:', error);
       alert('✗ Lỗi sync: ' + error.message + '\n\nKiểm tra:\n1. Token hợp lệ?\n2. Gist ID chính xác?\n3. Kết nối Internet?');
+    } finally {
+      if (syncBtn) {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = originalContent || '<i class="bi bi-cloud-arrow-up"></i> Đồng bộ DL';
+      }
+    }
+  }
+
+  async function performSyncWithRetry(settings, retryCount) {
+    const MAX_RETRIES = 5;
+    
+    // 1. Tải dữ liệu từ Server
+    const getResponse = await fetchWithTimeout(
+      `https://api.github.com/gists/${settings.gistId}?t=${Date.now()}`, // Cache busting
+      { headers: { 'Authorization': `token ${settings.token}` } },
+      10000
+    );
+    
+    let serverCameras = [];
+    if (getResponse.ok) {
+      const gist = await getResponse.json();
+      if (gist.files['cameras.json']) {
+        serverCameras = JSON.parse(gist.files['cameras.json'].content || '[]');
+      }
+    } else {
+      throw new Error('Không thể kết nối đến GitHub');
+    }
+
+    // 2. Hợp nhất
+    cameras = mergeCameraLists(cameras, serverCameras);
+    saveCameras();
+    renderMarkers(); renderTable(); updateStats();
+
+    // 3. Đẩy lên Server
+    const gistContent = JSON.stringify(cameras);
+    await fetchWithTimeout(
+      `https://api.github.com/gists/${settings.gistId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `token ${settings.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          files: { 'cameras.json': { content: gistContent } }
+        })
+      },
+      30000
+    );
+
+    // 4. KIỂM TRA LẠI (Verification)
+    // Chờ ngẫu nhiên 0.5s - 1.5s để tránh xung đột liên tục
+    await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
+
+    const verifyResponse = await fetchWithTimeout(
+      `https://api.github.com/gists/${settings.gistId}?t=${Date.now()}`,
+      { headers: { 'Authorization': `token ${settings.token}` } },
+      10000
+    );
+
+    if (verifyResponse.ok) {
+      const verifyGist = await verifyResponse.json();
+      const verifyContent = verifyGist.files['cameras.json'] ? verifyGist.files['cameras.json'].content : '[]';
+      const verifyCameras = JSON.parse(verifyContent);
+
+      // Kiểm tra xem dữ liệu của mình có bị người khác ghi đè không
+      const isDataLost = cameras.some(localCam => {
+        const serverCam = verifyCameras.find(c => c.id == localCam.id);
+        // Nếu server không có camera này HOẶC server có bản cũ hơn -> Mất dữ liệu
+        return !serverCam || (localCam.updatedAt || 0) > (serverCam.updatedAt || 0);
+      });
+
+      if (isDataLost) {
+        if (retryCount < MAX_RETRIES) {
+          console.warn(`Phát hiện xung đột dữ liệu (lần ${retryCount + 1}), đang thử lại...`);
+          await performSyncWithRetry(settings, retryCount + 1);
+        } else {
+          throw new Error('Hệ thống đang bận, vui lòng thử lại sau ít phút.');
+        }
+      } else {
+        // Nếu mọi thứ ổn, cập nhật lại lần cuối để đảm bảo đồng bộ nhất
+        cameras = mergeCameraLists(cameras, verifyCameras);
+        saveCameras();
+        renderMarkers(); renderTable(); updateStats();
+      }
     }
   }
 
