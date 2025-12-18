@@ -377,6 +377,14 @@
     gistId: 'gist_id'
   };
 
+  // CORS Proxies để hỗ trợ các trình duyệt
+  const CORS_PROXIES = [
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url='
+  ];
+
+  let currentProxyIndex = 0;
+
   function getGitHubSettings() {
     return {
       token: localStorage.getItem(STORAGE_KEYS.githubToken),
@@ -424,15 +432,17 @@
 
       if (response.ok) {
         alert('✓ Kết nối GitHub thành công!');
+        currentProxyIndex = 0;
       } else if (response.status === 401) {
-        alert('✗ Token không hợp lệ');
+        alert('✗ Token không hợp lệ hoặc đã hết hạn');
       } else if (response.status === 404) {
         alert('✗ Gist ID không tìm thấy');
       } else {
         alert('✗ Lỗi kết nối: ' + response.statusText);
       }
     } catch (error) {
-      alert('✗ Lỗi kết nối: ' + error.message);
+      console.error('Lỗi chi tiết:', error);
+      alert('✗ Lỗi kết nối: ' + error.message + '\n\nHướng dẫn:\n1. Kiểm tra Token và Gist ID\n2. Đảm bảo kết nối Internet\n3. Thử lại sau vài giây');
     }
   }
 
@@ -476,9 +486,11 @@
         throw new Error('HTTP ' + response.status);
       }
     } catch (error) {
-      alert('✗ Lỗi đồng bộ: ' + error.message);
-      event.target.closest('button').disabled = false;
-      event.target.closest('button').innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Sync';
+      console.error('Lỗi sync chi tiết:', error);
+      const btn = event.target.closest('button');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Sync';
+      alert('✗ Lỗi đồng bộ: ' + error.message + '\n\nHướng dẫn:\n1. Kiểm tra Token và Gist ID\n2. Đảm bảo kết nối Internet\n3. Thử lại sau vài giây');
     }
   }
 
@@ -507,6 +519,8 @@
             console.log('✓ Dữ liệu đã được tải từ GitHub');
           }
         }
+      } else if (response.status === 401) {
+        console.warn('GitHub Token không hợp lệ');
       }
     } catch (error) {
       console.log('Không thể tải từ GitHub:', error.message);
