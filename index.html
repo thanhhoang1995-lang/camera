@@ -327,15 +327,25 @@
       </div>
       <div class='modal-body'>
         <p class='text-muted small'>Để lưu dữ liệu trên GitHub, cần cấu hình thông tin sau:</p>
+        
+        <div class='alert alert-info mb-2' role='alert'>
+          <small><strong>Hướng dẫn nhanh:</strong><br>
+          1. Vào <a href='https://gist.github.com/' target='_blank' class='alert-link'>gist.github.com</a> → Tạo Gist mới<br>
+          2. <strong>Gist ID:</strong> Copy từ URL: <code>gist.github.com/username/<u>abc123...</u></code><br>
+          3. <strong>Token:</strong> Tạo tại <a href='https://github.com/settings/tokens' target='_blank' class='alert-link'>settings/tokens</a> (scope: gist)<br>
+          4. Dán vào đây và nhấn Lưu
+          </small>
+        </div>
+
         <div class='mb-2'>
           <label class='form-label small'>GitHub Personal Token:</label>
           <input type='password' id='githubToken' class='form-control form-control-sm' placeholder='ghp_xxxxxxxxxxxxxxx'>
-          <small class='text-muted'>Tạo tại: github.com/settings/tokens</small>
+          <small class='text-muted'>Token với quyền gist</small>
         </div>
         <div class='mb-2'>
           <label class='form-label small'>Gist ID:</label>
-          <input type='text' id='gistId' class='form-control form-control-sm' placeholder='xxxxxxxxxxxxxxxx'>
-          <small class='text-muted'>ID của Gist trên GitHub</small>
+          <input type='text' id='gistId' class='form-control form-control-sm' placeholder='abc123def456...'>
+          <small class='text-muted'>ID hoặc URL đầy đủ từ GitHub Gist</small>
         </div>
         <div class='mb-3'>
           <button class='btn btn-sm btn-info w-100' onclick='testGitHubConnection()'>
@@ -385,6 +395,18 @@
 
   let currentProxyIndex = 0;
 
+  // Hàm trích xuất Gist ID từ URL hoặc ID trực tiếp
+  function parseGistId(input) {
+    input = input.trim();
+    // Nếu là URL, trích xuất ID
+    if (input.includes('gist.github.com')) {
+      const parts = input.split('/');
+      return parts[parts.length - 1].split('#')[0]; // Lấy ID cuối cùng, bỏ phần anchor
+    }
+    // Nếu là ID trực tiếp
+    return input;
+  }
+
   function getGitHubSettings() {
     return {
       token: localStorage.getItem(STORAGE_KEYS.githubToken),
@@ -394,17 +416,56 @@
 
   function saveGitHubSettings() {
     const token = document.getElementById('githubToken').value.trim();
-    const gistId = document.getElementById('gistId').value.trim();
+    let gistId = document.getElementById('gistId').value.trim();
     
     if (!token || !gistId) {
       alert('Vui lòng điền đầy đủ thông tin');
       return;
     }
     
+    // Parse Gist ID (hỗ trợ cả URL và ID trực tiếp)
+    gistId = parseGistId(gistId);
+    
+    // Xác thực định dạng Gist ID (phải là 32 ký tự hex)
+    if (!/^[a-f0-9]{32}$/.test(gistId)) {
+      alert('❌ Gist ID không hợp lệ!\n\nGist ID phải:\n- Là chuỗi 32 ký tự hex\n- Hoặc là URL đầy đủ từ GitHub\n\nVí dụ:\n✓ abc123def456...\n✓ gist.github.com/username/abc123def456...');
+      return;
+    }
+    
     localStorage.setItem(STORAGE_KEYS.githubToken, token);
     localStorage.setItem(STORAGE_KEYS.gistId, gistId);
-    alert('Cài đặt đã được lưu!');
-    bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+    
+    // Tự động tạo file cameras.json nếu chưa có
+    initializeGistFile(token, gistId);
+  }
+
+  async function initializeGistFile(token, gistId) {
+    try {
+      const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          files: {
+            'cameras.json': {
+              content: JSON.stringify([], null, 2)
+            }
+          }
+        })
+      });
+
+      if (response.ok) {
+        alert('✓ Cài đặt đã được lưu và file cameras.json đã được tạo!');
+        bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+      } else {
+        alert('✗ Không thể tạo file. Kiểm tra Gist ID và Token');
+      }
+    } catch (error) {
+      alert('✗ Lỗi: ' + error.message);
+    }
   }
 
   function showSettings() {
@@ -436,13 +497,13 @@
       } else if (response.status === 401) {
         alert('✗ Token không hợp lệ hoặc đã hết hạn');
       } else if (response.status === 404) {
-        alert('✗ Gist ID không tìm thấy');
+        alert('✗ Gist ID không tìm thấy!\n\nKiểm tra:\n1. Gist ID có chính xác?\n2. Có phải Gist của tài khoản GitHub hiện tại?\n3. Token có đúng quyền gist?');
       } else {
         alert('✗ Lỗi kết nối: ' + response.statusText);
       }
     } catch (error) {
       console.error('Lỗi chi tiết:', error);
-      alert('✗ Lỗi kết nối: ' + error.message + '\n\nHướng dẫn:\n1. Kiểm tra Token và Gist ID\n2. Đảm bảo kết nối Internet\n3. Thử lại sau vài giây');
+      alert('✗ Lỗi kết nối: ' + error.message + '\n\nKiểm tra:\n1. Kết nối Internet\n2. Token và Gist ID chính xác\n3. Thử lại sau vài giây');
     }
   }
 
