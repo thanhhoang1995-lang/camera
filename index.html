@@ -471,17 +471,26 @@
         10000 // 10 giây timeout
       );
 
+      console.log('Response status:', response.status);
+
       if (response.ok) {
         alert('✓ Cài đặt đã được lưu và file cameras.json đã được tạo!');
         bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+      } else if (response.status === 401) {
+        alert('✗ Token không hợp lệ hoặc đã hết hạn\n\nKiểm tra:\n1. Token có chính xác?\n2. Token có scope "gist"?\n3. Token đã hết hạn?');
+      } else if (response.status === 403) {
+        alert('✗ Token không có quyền truy cập Gist\n\nKiểm tra:\n1. Tạo token mới với scope "gist"\n2. Token có bị từ chối quyền?');
+      } else if (response.status === 404) {
+        alert('✗ Gist không tìm thấy\n\nKiểm tra:\n1. Gist ID có chính xác?\n2. Gist có tồn tại trên GitHub?');
       } else {
-        alert('✗ Không thể tạo file. Kiểm tra Gist ID và Token');
+        alert(`✗ Lỗi HTTP ${response.status}\n\nKiểm tra:\n1. Gist ID: ${gistId}\n2. Token có đúng quyền?\n3. Thử lại sau vài giây`);
       }
     } catch (error) {
       if (error.name === 'AbortError') {
         alert('✗ Kết nối timeout - kiểm tra Internet');
       } else {
-        alert('✗ Lỗi: ' + error.message);
+        console.error('Chi tiết lỗi:', error);
+        alert('✗ Lỗi: ' + error.message + '\n\nKiểm tra:\n1. Kết nối Internet\n2. Token và Gist ID chính xác');
       }
     }
   }
