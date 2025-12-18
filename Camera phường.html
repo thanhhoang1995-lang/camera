@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <title>Dashboard Quản lý Camera - Nâng cấp</title>
+  <meta charset='utf-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <link rel='stylesheet' href='https://unpkg.com/leaflet/dist/leaflet.css' />
+  <link rel='stylesheet' href='https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css' />
+  <link rel='stylesheet' href='https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css' />
+  <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' />
+  <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css' />
+  <style>
+    body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; }
+    .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .navbar-brand { font-weight: bold; font-size: 1.3rem; }
+    #map { height: 60vh; width: 100%; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    #sidebar { max-height: 55vh; overflow-y: auto; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .card { border: none; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
+    .card-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px 8px 0 0; font-weight: bold; padding: 0.75rem; font-size: 0.9rem; }
+    .card-body { padding: 0.75rem; }
+    .stats-box { text-align: center; padding: 10px; border-radius: 8px; color: white; margin-bottom: 0; }
+    .stats-box h3 { margin: 0.25rem 0; font-size: 1.5rem; }
+    .stats-box p { margin: 0; font-size: 0.75rem; }
+    .stats-online { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .stats-offline { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+    .stats-total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .online { color: #11998e; font-weight: bold; }
+    .offline { color: #eb3349; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { border: 1px solid #dee2e6; padding: 6px; text-align: left; }
+    th { background-color: #f1f3f5; font-weight: bold; }
+    tr:hover { background-color: #f8f9fa; }
+    button { margin: 2px; }
+    input[type='number'], input[type='text'], select { width: 100%; font-size: 0.85rem; padding: 0.25rem; }
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
+    .search-box { position: relative; }
+    .chart-container { position: relative; height: 200px; margin: 10px 0; }
+    .container-fluid { padding: 0.5rem; }
+    .row { margin-right: -0.25rem; margin-left: -0.25rem; }
+    .col-md-6, .col-md-8, .col-md-12 { padding-right: 0.25rem; padding-left: 0.25rem; }
+    .pin-mode #map { cursor: crosshair; }
+    .pin-mode-active { background-color: #ffc107 !important; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+      .navbar-brand { font-size: 0.9rem; }
+      .navbar-subtitle { font-size: 0.65rem; }
+      #map { height: 50vh; }
+      .stats-box { padding: 8px; }
+      .stats-box h3 { font-size: 1.2rem; }
+      .stats-box p { font-size: 0.65rem; }
+      .card-header { font-size: 0.8rem; padding: 0.5rem; }
+      .card-body { padding: 0.5rem; }
+      .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.65rem; }
+      table { font-size: 0.7rem; }
+      th, td { padding: 4px; }
+      .chart-container { height: 150px; }
+      .modal-body { font-size: 0.85rem; }
+      .modal-body input, .modal-body select { font-size: 0.75rem; padding: 0.3rem; }
+      .table-responsive { font-size: 0.75rem; }
+    }
+
+    @media (max-width: 480px) {
+      .navbar { padding: 0.4rem 0.5rem; }
+      .navbar-brand { font-size: 0.8rem; }
+      #map { height: 45vh; }
+      .stats-box { padding: 6px; }
+      .stats-box h3 { font-size: 1rem; }
+      .stats-box p { font-size: 0.6rem; }
+      .card { margin-bottom: 10px; }
+      .card-header { font-size: 0.75rem; padding: 0.4rem; }
+      .card-body { padding: 0.4rem; }
+      .btn-sm { padding: 0.15rem 0.3rem; font-size: 0.6rem; }
+      table { font-size: 0.65rem; }
+      th, td { padding: 3px; }
+      input[type='number'], input[type='text'], select { font-size: 0.75rem; }
+      .search-box input { font-size: 0.8rem; }
+      .btn-group { width: 100%; }
+      .btn-group .btn { flex: 1; }
+      .chart-container { height: 120px; margin: 5px 0; }
+      .container-fluid { padding: 0.25rem; }
+
+      /* Ẩn cột Lat (5) và Lng (6) trên điện thoại */
+      table thead th:nth-child(5),
+      table tbody td:nth-child(5),
+      table thead th:nth-child(6),
+      table tbody td:nth-child(6) {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+<!-- Navbar -->
+<nav class='navbar navbar-dark'>
+  <div class='container-fluid'>
+    <span class='navbar-brand'><i class='bi bi-camera-video'></i> Quản lý Camera</span>
+    <span class='text-white'>Phường Lâm Viên - Đà Lạt</span>
+  </div>
+</nav>
+
+<div class='container-fluid mt-2'>
+  <!-- Statistics Cards -->
+  <div class='row mb-3'>
+    <div class='col-md-6 col-12 mb-1 mb-md-0'>
+      <div class='row'>
+        <div class='col-md-12 col-12'>
+          <div class='stats-box stats-total'>
+            <h3 id='totalCount'>0</h3>
+            <p>Tổng số Camera</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class='col-md-6 col-12'>
+      <div class='row'>
+        <div class='col-md-6 col-6'>
+          <div class='stats-box stats-online'>
+            <h3 id='onlineCount'>0</h3>
+            <p>Online</p>
+          </div>
+        </div>
+        <div class='col-md-6 col-6'>
+          <div class='stats-box stats-offline'>
+            <h3 id='offlineCount'>0</h3>
+            <p>Offline</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class='row'>
+    <div class='col-md-8 col-12'>
+      <div class='card'>
+        <div class='card-header'>
+          <i class='bi bi-map'></i> Bản đồ
+        </div>
+        <div class='card-body p-0'>
+          <div id='map' style='margin: 5px;'></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Management Panel -->
+  <div class='row mt-4'>
+    <div class='col-md-12'>
+      <div class='card'>
+        <div class='card-header'>
+          <i class='bi bi-list-ul'></i> Quản lý Camera
+        </div>
+        <div class='card-body'>
+          <!-- Search and Filter -->
+          <div class='row mb-2'>
+            <div class='col-md-6 col-12'>
+              <div class='search-box'>
+                <input type='text' id='searchInput' class='form-control form-control-sm' placeholder='Tìm kiếm...'>
+              </div>
+            </div>
+            <div class='col-md-6 col-12'>
+              <div class='btn-group w-100' role='group' style='gap: 2px;'>
+                <button class='btn btn-sm btn-outline-success' style='flex:1;' onclick='toggleFilter("online")'>
+                  <input type='checkbox' id='filterOnline' checked style='width:auto;'> Online
+                </button>
+                <button class='btn btn-sm btn-outline-danger' style='flex:1;' onclick='toggleFilter("offline")'>
+                  <input type='checkbox' id='filterOffline' checked style='width:auto;'> Offline
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class='row mb-2'>
+            <div class='col-12'>
+              <div class='d-flex flex-wrap gap-1'>
+                <button class='btn btn-success btn-sm' onclick='addCamera()'>
+                  <i class='bi bi-plus-circle'></i> Thêm
+                </button>
+                <button class='btn btn-warning btn-sm' id='pinBtn' onclick='togglePinMode()'>
+                  <i class='bi bi-geo-alt'></i> Ghim vị trí
+                </button>
+                <button class='btn btn-info btn-sm' onclick='syncToGitHub()' title='Đồng bộ dữ liệu với GitHub'>
+                  <i class='bi bi-cloud-arrow-up'></i> Sync
+                </button>
+                <button class='btn btn-info btn-sm' onclick='exportCSV()'>
+                  <i class='bi bi-download'></i> Xuất
+                </button>
+                <button class='btn btn-primary btn-sm' onclick='document.getElementById("importFile").click()'>
+                  <i class='bi bi-upload'></i> Nhập
+                </button>
+                <button class='btn btn-secondary btn-sm' onclick='showSettings()' title='Cài đặt GitHub'>
+                  <i class='bi bi-gear'></i> Cài đặt
+                </button>
+                <button class='btn btn-danger btn-sm' onclick='clearStorageData()' title='Xóa tất cả dữ liệu lưu trữ'>
+                  <i class='bi bi-trash'></i> Xóa dữ liệu
+                </button>
+                <input type='file' id='importFile' accept='text/csv,.csv' style='display:none;' onchange='importCSV(event)' multiple='false'>
+              </div>
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class='table-responsive'>
+            <table class='table table-hover table-sm mb-0'>
+              <thead>
+                <tr><th>#</th><th>Tên</th><th>IP</th><th>Địa chỉ</th><th>Lat</th><th>Lng</th><th>Trạng thái</th><th>Hành động</th></tr>
+              </thead>
+              <tbody id='cameraTable'></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class='modal fade' id='editModal' tabindex='-1'>
+  <div class='modal-dialog modal-sm'>
+    <div class='modal-content'>
+      <div class='modal-header bg-primary text-white'>
+        <h5 class='modal-title'><i class='bi bi-pencil-square'></i> Chỉnh sửa Camera</h5>
+        <button type='button' class='btn-close btn-close-white' data-bs-dismiss='modal'></button>
+      </div>
+      <div class='modal-body'>
+        <input type='hidden' id='editId'>
+        <div class='mb-2'>
+          <label class='form-label small'>Tên Camera:</label>
+          <input type='text' id='editName' class='form-control form-control-sm'>
+        </div>
+        <div class='mb-2'>
+          <label class='form-label small'>IP:</label>
+          <input type='text' id='editIP' class='form-control form-control-sm'>
+        </div>
+        <div class='mb-2'>
+          <label class='form-label small'>Địa chỉ:</label>
+          <input type='text' id='editAddress' class='form-control form-control-sm'>
+        </div>
+        <div class='row'>
+          <div class='col-6 mb-2'>
+            <label class='form-label small'>Vĩ độ:</label>
+            <input type='number' step='0.00001' id='editLat' class='form-control form-control-sm'>
+          </div>
+          <div class='col-6 mb-2'>
+            <label class='form-label small'>Kinh độ:</label>
+            <input type='number' step='0.00001' id='editLng' class='form-control form-control-sm'>
+          </div>
+        </div>
+        <div class='mb-2'>
+          <label class='form-label small'>Trạng thái:</label>
+          <select id='editStatus' class='form-control form-control-sm'>
+            <option value='online'>Online</option>
+            <option value='offline'>Offline</option>
+          </select>
+        </div>
+      </div>
+      <div class='modal-footer'>
+        <button type='button' class='btn btn-secondary btn-sm' data-bs-dismiss='modal'>Hủy</button>
+        <button type='button' class='btn btn-primary btn-sm' onclick='saveEdit()'>
+          <i class='bi bi-check-circle'></i> Lưu
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Camera Modal -->
+<div class='modal fade' id='addCameraModal' tabindex='-1'>
+  <div class='modal-dialog modal-sm'>
+    <div class='modal-content'>
+      <div class='modal-header bg-success text-white'>
+        <h5 class='modal-title'><i class='bi bi-plus-circle'></i> Thêm Camera Mới</h5>
+        <button type='button' class='btn-close btn-close-white' data-bs-dismiss='modal'></button>
+      </div>
+      <div class='modal-body'>
+        <div class='mb-2'>
+          <label class='form-label small'>Tên Camera:</label>
+          <input type='text' id='addName' class='form-control form-control-sm' placeholder='Camera 1'>
+        </div>
+        <div class='mb-2'>
+          <label class='form-label small'>IP:</label>
+          <input type='text' id='addIP' class='form-control form-control-sm' placeholder='192.168.1.1'>
+        </div>
+        <div class='mb-2'>
+          <label class='form-label small'>Địa chỉ:</label>
+          <input type='text' id='addAddress' class='form-control form-control-sm' placeholder='Địa chỉ camera'>
+        </div>
+        <div class='row'>
+          <div class='col-6 mb-2'>
+            <label class='form-label small'>Vĩ độ:</label>
+            <input type='number' step='0.00001' id='addLat' class='form-control form-control-sm' readonly>
+          </div>
+          <div class='col-6 mb-2'>
+            <label class='form-label small'>Kinh độ:</label>
+            <input type='number' step='0.00001' id='addLng' class='form-control form-control-sm' readonly>
+          </div>
+        </div>
+        <div class='mb-2'>
+          <label class='form-label small'>Trạng thái:</label>
+          <select id='addStatus' class='form-control form-control-sm'>
+            <option value='online'>Online</option>
+            <option value='offline'>Offline</option>
+          </select>
+        </div>
+      </div>
+      <div class='modal-footer'>
+        <button type='button' class='btn btn-secondary btn-sm' data-bs-dismiss='modal'>Hủy</button>
+        <button type='button' class='btn btn-success btn-sm' onclick='saveNewCamera()'>
+          <i class='bi bi-check-circle'></i> Thêm
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class='modal fade' id='settingsModal' tabindex='-1'>
+  <div class='modal-dialog modal-sm'>
+    <div class='modal-content'>
+      <div class='modal-header bg-secondary text-white'>
+        <h5 class='modal-title'><i class='bi bi-gear'></i> Cài đặt GitHub</h5>
+        <button type='button' class='btn-close btn-close-white' data-bs-dismiss='modal'></button>
+      </div>
+      <div class='modal-body'>
+        <p class='text-muted small'>Để lưu dữ liệu trên GitHub, cần cấu hình thông tin sau:</p>
+        <div class='mb-2'>
+          <label class='form-label small'>GitHub Personal Token:</label>
+          <input type='password' id='githubToken' class='form-control form-control-sm' placeholder='ghp_xxxxxxxxxxxxxxx'>
+          <small class='text-muted'>Tạo tại: github.com/settings/tokens</small>
+        </div>
+        <div class='mb-2'>
+          <label class='form-label small'>Gist ID:</label>
+          <input type='text' id='gistId' class='form-control form-control-sm' placeholder='xxxxxxxxxxxxxxxx'>
+          <small class='text-muted'>ID của Gist trên GitHub</small>
+        </div>
+        <div class='mb-3'>
+          <button class='btn btn-sm btn-info w-100' onclick='testGitHubConnection()'>
+            <i class='bi bi-cloud-check'></i> Kiểm tra kết nối
+          </button>
+        </div>
+      </div>
+      <div class='modal-footer'>
+        <button type='button' class='btn btn-secondary btn-sm' data-bs-dismiss='modal'>Hủy</button>
+        <button type='button' class='btn btn-primary btn-sm' onclick='saveGitHubSettings()'>
+          <i class='bi bi-check-circle'></i> Lưu
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src='https://unpkg.com/leaflet/dist/leaflet.js'></script>
+<script src='https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'></script>
+
+<script>
+  const map = L.map('map').setView([11.9404, 108.4583], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+
+  const onlineIcon = L.icon({ iconUrl: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
+  const offlineIcon = L.icon({ iconUrl: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
+  const tempIcon = L.icon({ iconUrl: 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png', iconSize: [32, 32], iconAnchor: [16, 32] });
+
+  let cameras = [];
+  let isPinMode = false;
+  let tempMarker = null;
+
+  // GitHub Gist Configuration
+  const STORAGE_KEYS = {
+    cameras: 'cameras',
+    githubToken: 'github_token',
+    gistId: 'gist_id'
+  };
+
+  function getGitHubSettings() {
+    return {
+      token: localStorage.getItem(STORAGE_KEYS.githubToken),
+      gistId: localStorage.getItem(STORAGE_KEYS.gistId)
+    };
+  }
+
+  function saveGitHubSettings() {
+    const token = document.getElementById('githubToken').value.trim();
+    const gistId = document.getElementById('gistId').value.trim();
+    
+    if (!token || !gistId) {
+      alert('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+    
+    localStorage.setItem(STORAGE_KEYS.githubToken, token);
+    localStorage.setItem(STORAGE_KEYS.gistId, gistId);
+    alert('Cài đặt đã được lưu!');
+    bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+  }
+
+  function showSettings() {
+    const settings = getGitHubSettings();
+    document.getElementById('githubToken').value = settings.token || '';
+    document.getElementById('gistId').value = settings.gistId || '';
+    new bootstrap.Modal(document.getElementById('settingsModal')).show();
+  }
+
+  async function testGitHubConnection() {
+    const settings = getGitHubSettings();
+    
+    if (!settings.token || !settings.gistId) {
+      alert('Vui lòng điền đầy đủ thông tin trước');
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://api.github.com/gists/${settings.gistId}`, {
+        headers: {
+          'Authorization': `token ${settings.token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+
+      if (response.ok) {
+        alert('✓ Kết nối GitHub thành công!');
+      } else if (response.status === 401) {
+        alert('✗ Token không hợp lệ');
+      } else if (response.status === 404) {
+        alert('✗ Gist ID không tìm thấy');
+      } else {
+        alert('✗ Lỗi kết nối: ' + response.statusText);
+      }
+    } catch (error) {
+      alert('✗ Lỗi kết nối: ' + error.message);
+    }
+  }
+
+  async function syncToGitHub() {
+    const settings = getGitHubSettings();
+    
+    if (!settings.token || !settings.gistId) {
+      alert('Vui lòng cấu hình GitHub trước (Cài đặt > Cài đặt GitHub)');
+      showSettings();
+      return;
+    }
+
+    try {
+      const syncBtn = event.target.closest('button');
+      syncBtn.disabled = true;
+      syncBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Đang sync...';
+
+      const gistContent = JSON.stringify(cameras, null, 2);
+      
+      const response = await fetch(`https://api.github.com/gists/${settings.gistId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `token ${settings.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          files: {
+            'cameras.json': {
+              content: gistContent
+            }
+          }
+        })
+      });
+
+      if (response.ok) {
+        syncBtn.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Sync';
+        syncBtn.disabled = false;
+        alert('✓ Dữ liệu đã được đồng bộ lên GitHub!');
+      } else {
+        throw new Error('HTTP ' + response.status);
+      }
+    } catch (error) {
+      alert('✗ Lỗi đồng bộ: ' + error.message);
+      event.target.closest('button').disabled = false;
+      event.target.closest('button').innerHTML = '<i class="bi bi-cloud-arrow-up"></i> Sync';
+    }
+  }
+
+  async function loadFromGitHub() {
+    const settings = getGitHubSettings();
+    
+    if (!settings.token || !settings.gistId) {
+      return; // GitHub chưa được cấu hình
+    }
+
+    try {
+      const response = await fetch(`https://api.github.com/gists/${settings.gistId}`, {
+        headers: {
+          'Authorization': `token ${settings.token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+
+      if (response.ok) {
+        const gist = await response.json();
+        if (gist.files['cameras.json']) {
+          const content = gist.files['cameras.json'].content;
+          const data = JSON.parse(content);
+          if (Array.isArray(data) && data.length > 0) {
+            localStorage.setItem(STORAGE_KEYS.cameras, JSON.stringify(data));
+            console.log('✓ Dữ liệu đã được tải từ GitHub');
+          }
+        }
+      }
+    } catch (error) {
+      console.log('Không thể tải từ GitHub:', error.message);
+    }
+  }
+
+  // Hàm tải dữ liệu từ localStorage
+  async function loadCameras() {
+    // Cố gắng tải từ GitHub trước
+    await loadFromGitHub();
+    
+    const stored = localStorage.getItem(STORAGE_KEYS.cameras);
+    if (stored) {
+      cameras = JSON.parse(stored);
+    }
+  }
+
+  // Hàm lưu dữ liệu vào localStorage
+  function saveCameras() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.cameras, JSON.stringify(cameras));
+      showSaveNotification();
+      console.log('✓ Dữ liệu đã được lưu vào localStorage');
+    } catch (error) {
+      console.error('Lỗi lưu dữ liệu:', error);
+      alert('Không thể lưu dữ liệu. Vui lòng kiểm tra cài đặt trình duyệt của bạn.');
+    }
+  }
+
+  // Hàm hiển thị thông báo lưu thành công (chỉ trên mobile/desktop nhỏ)
+  function showSaveNotification() {
+    const notif = document.createElement('div');
+    notif.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #28a745; color: white; padding: 12px 20px; border-radius: 4px; font-size: 14px; z-index: 9999; animation: slideIn 0.3s ease-in-out;';
+    notif.textContent = '✓ Dữ liệu đã được lưu';
+    document.body.appendChild(notif);
+    setTimeout(() => notif.remove(), 2000);
+  }
+
+  // Hàm xóa dữ liệu từ localStorage
+  function clearStorageData() {
+    if (confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu camera không?')) {
+      localStorage.removeItem(STORAGE_KEYS.cameras);
+      alert('Dữ liệu đã được xóa.');
+      location.reload();
+    }
+  }
+
+  function generateRandomCameras(total = 200) {
+    const centerLat = 11.9404;
+    const centerLng = 108.4583;
+    const maxDelta = 0.2;
+    for (let i = 1; i <= total; i++) {
+      const lat = centerLat + (Math.random() - 0.5) * maxDelta;
+      const lng = centerLng + (Math.random() - 0.5) * maxDelta;
+      const status = Math.random() > 0.3 ? 'online' : 'offline';
+      const ip = `192.168.${Math.floor((i - 1) / 254)}.${((i - 1) % 254) + 1}`;
+      cameras.push({ id: i, name: `Camera ${i}`, ip, address: `Địa chỉ ${i}`, lat, lng, status });
+    }
+  }
+
+  const markers = L.markerClusterGroup();
+
+  function updateStats() {
+    const total = cameras.length;
+    const online = cameras.filter(c => c.status === 'online').length;
+    const offline = total - online;
+    document.getElementById('totalCount').textContent = total;
+    document.getElementById('onlineCount').textContent = online;
+    document.getElementById('offlineCount').textContent = offline;
+  }
+
+  function renderMarkers() {
+    markers.clearLayers();
+    const showOnline = document.getElementById('filterOnline').checked;
+    const showOffline = document.getElementById('filterOffline').checked;
+    cameras.filter(cam => (cam.status === 'online' && showOnline) || (cam.status === 'offline' && showOffline))
+      .forEach(cam => {
+        const marker = L.marker([cam.lat, cam.lng], { icon: cam.status === 'online' ? onlineIcon : offlineIcon });
+        marker.bindPopup(`<b>${cam.name}</b><br>${cam.address}`);
+        markers.addLayer(marker);
+      });
+    map.addLayer(markers);
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('cameraTable');
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const showOnline = document.getElementById('filterOnline').checked;
+    const showOffline = document.getElementById('filterOffline').checked;
+    tbody.innerHTML = '';
+    let rowNum = 1;
+    cameras.filter(cam => {
+      const matchesSearch = cam.name.toLowerCase().includes(searchTerm) || cam.ip.toLowerCase().includes(searchTerm);
+      const matchesStatus = (cam.status === 'online' && showOnline) || (cam.status === 'offline' && showOffline);
+      return matchesSearch && matchesStatus;
+    }).forEach(cam => {
+      const row = document.createElement('tr');
+      row.style.cursor = 'pointer';
+      row.onclick = () => focusCamera(cam);
+      row.innerHTML = `<td>${rowNum++}</td><td>${cam.name}</td><td>${cam.ip}</td><td>${cam.address}</td>
+        <td>${cam.lat.toFixed(4)}</td><td>${cam.lng.toFixed(4)}</td>
+        <td><span class='${cam.status}'>${cam.status}</span></td>
+        <td><button class='btn btn-sm btn-warning' onclick='event.stopPropagation(); editCamera(${cam.id})'>Sửa</button>
+        <button class='btn btn-sm btn-danger' onclick='event.stopPropagation(); deleteCamera(${cam.id})'>Xóa</button></td>`;
+      tbody.appendChild(row);
+    });
+  }
+
+  function editCamera(id) {
+    const cam = cameras.find(c => c.id === id);
+    document.getElementById('editId').value = id;
+    document.getElementById('editName').value = cam.name;
+    document.getElementById('editIP').value = cam.ip;
+    document.getElementById('editAddress').value = cam.address;
+    document.getElementById('editLat').value = cam.lat;
+    document.getElementById('editLng').value = cam.lng;
+    document.getElementById('editStatus').value = cam.status;
+    new bootstrap.Modal(document.getElementById('editModal')).show();
+  }
+
+  function saveEdit() {
+    const id = parseInt(document.getElementById('editId').value);
+    const cam = cameras.find(c => c.id === id);
+    cam.name = document.getElementById('editName').value;
+    cam.ip = document.getElementById('editIP').value;
+    cam.address = document.getElementById('editAddress').value;
+    cam.lat = parseFloat(document.getElementById('editLat').value);
+    cam.lng = parseFloat(document.getElementById('editLng').value);
+    cam.status = document.getElementById('editStatus').value;
+    saveCameras();
+    bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+    renderMarkers(); renderTable(); updateStats();
+  }
+
+  function togglePinMode() {
+    isPinMode = !isPinMode;
+    const pinBtn = document.getElementById('pinBtn');
+    if (isPinMode) {
+      pinBtn.classList.add('pin-mode-active');
+      document.getElementById('map').parentElement.classList.add('pin-mode');
+      map.dragging.disable();
+    } else {
+      pinBtn.classList.remove('pin-mode-active');
+      document.getElementById('map').parentElement.classList.remove('pin-mode');
+      map.dragging.enable();
+      if (tempMarker) {
+        map.removeLayer(tempMarker);
+        tempMarker = null;
+      }
+    }
+  }
+
+  function saveNewCamera() {
+    const name = document.getElementById('addName').value.trim();
+    const ip = document.getElementById('addIP').value.trim();
+    const address = document.getElementById('addAddress').value.trim();
+    const lat = parseFloat(document.getElementById('addLat').value);
+    const lng = parseFloat(document.getElementById('addLng').value);
+    const status = document.getElementById('addStatus').value;
+
+    if (!name || !ip || !address) {
+      alert('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+
+    const newId = cameras.length ? Math.max(...cameras.map(c => c.id)) + 1 : 1;
+    cameras.push({ id: newId, name, ip, address, lat, lng, status });
+    saveCameras();
+
+    // Reset form
+    document.getElementById('addName').value = '';
+    document.getElementById('addIP').value = '';
+    document.getElementById('addAddress').value = '';
+    document.getElementById('addLat').value = '';
+    document.getElementById('addLng').value = '';
+    document.getElementById('addStatus').value = 'online';
+
+    bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
+    renderMarkers(); renderTable(); updateStats();
+
+    // Tắt chế độ ghim
+    if (isPinMode) {
+      togglePinMode();
+    }
+  }
+
+  function deleteCamera(id) {
+    cameras = cameras.filter(c => c.id !== id);
+    saveCameras();
+    renderMarkers(); renderTable(); updateStats();
+  }
+
+  function addCamera() {
+    // Reset form
+    document.getElementById('addName').value = '';
+    document.getElementById('addIP').value = '';
+    document.getElementById('addAddress').value = '';
+    document.getElementById('addLat').value = '';
+    document.getElementById('addLng').value = '';
+    document.getElementById('addStatus').value = 'offline';
+    new bootstrap.Modal(document.getElementById('addCameraModal')).show();
+  }
+
+  function exportCSV() {
+    let csv = 'Tên,IP,Địa chỉ,Vĩ độ,Kinh độ,Trạng thái\n';
+    cameras.forEach(cam => {
+      csv += `"${cam.name}","${cam.ip}","${cam.address}",${cam.lat.toFixed(5)},${cam.lng.toFixed(5)},"${cam.status}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'cameras.csv';
+    link.click();
+  }
+
+  function importCSV(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const lines = e.target.result.split('\n').slice(1);
+      const newCameras = [];
+      const startId = cameras.length ? cameras[cameras.length-1].id + 1 : 1;
+      lines.forEach((line, index) => {
+        if (line.trim()) {
+          const cols = line.split(',').map(col => col.replace(/"/g, '').trim());
+          if (cols.length >= 6) {
+            newCameras.push({ id: startId + index, name: cols[0], ip: cols[1], address: cols[2],
+              lat: parseFloat(cols[3]), lng: parseFloat(cols[4]), status: cols[5] });
+          }
+        }
+      });
+      cameras = cameras.concat(newCameras);
+      saveCameras();
+      document.getElementById('importFile').value = '';
+      renderMarkers(); renderTable(); updateStats();
+      alert(`Đã nhập ${newCameras.length} camera`);
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  function toggleFilter(type) {
+    const checkbox = document.getElementById('filter' + type.charAt(0).toUpperCase() + type.slice(1));
+    checkbox.checked = !checkbox.checked;
+    renderMarkers(); renderTable();
+  }
+
+  // Event listener cho map click trong chế độ ghim
+  map.on('click', function(e) {
+    if (!isPinMode) return;
+
+    const lat = e.latlng.lat;
+    const lng = e.latlng.lng;
+
+    // Xóa marker tạm thời cũ
+    if (tempMarker) {
+      map.removeLayer(tempMarker);
+    }
+
+    // Thêm marker tạm thời với màu vàng
+    tempMarker = L.marker([lat, lng], { icon: tempIcon });
+    tempMarker.addTo(map);
+
+    // Điền tọa độ vào form
+    document.getElementById('addLat').value = lat.toFixed(5);
+    document.getElementById('addLng').value = lng.toFixed(5);
+
+    // Mở modal thêm camera
+    new bootstrap.Modal(document.getElementById('addCameraModal')).show();
+  });
+
+  document.getElementById('filterOnline').addEventListener('change', () => { renderMarkers(); renderTable(); updateStats(); });
+  document.getElementById('filterOffline').addEventListener('change', () => { renderMarkers(); renderTable(); updateStats(); });
+  document.getElementById('searchInput').addEventListener('input', () => { renderTable(); });
+
+  // Event khi modal đóng lại
+  document.getElementById('addCameraModal').addEventListener('hidden.bs.modal', function() {
+    if (tempMarker) {
+      map.removeLayer(tempMarker);
+      tempMarker = null;
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', async function() {
+    await loadCameras();
+    renderMarkers(); renderTable(); updateStats();
+  });
+
+  function focusCamera(cam) {
+    map.setView([cam.lat, cam.lng], 17);
+    const popup = L.popup()
+      .setLatLng([cam.lat, cam.lng])
+      .setContent(`<b>${cam.name}</b><br>${cam.address}`)
+      .openOn(map);
+  }
+</script>
+</body>
+</html>
