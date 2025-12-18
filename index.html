@@ -188,6 +188,9 @@
                 <button class='btn btn-warning btn-sm' id='pinBtn' onclick='togglePinMode()'>
                   <i class='bi bi-geo-alt'></i> Ghim vị trí
                 </button>
+                <button class='btn btn-primary btn-sm' onclick='locateUser()'>
+                  <i class='bi bi-cursor-fill'></i> Vị trí tôi
+                </button>
                 <button class='btn btn-info btn-sm' onclick='syncToGitHub()' title='Đồng bộ dữ liệu với GitHub'>
                   <i class='bi bi-cloud-arrow-up'></i> Đồng bộ DL
                 </button>
@@ -850,6 +853,63 @@
     saveCameras();
     bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
     renderMarkers(); renderTable(); updateStats();
+  }
+
+  function locateUser() {
+    if (!navigator.geolocation) {
+      alert('Trình duyệt không hỗ trợ định vị.');
+      return;
+    }
+
+    const btn = event.target.closest('button');
+    const originalContent = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang tìm...';
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const accuracy = position.coords.accuracy;
+
+        // Xóa marker cũ nếu có
+        if (window.userLocationMarker) map.removeLayer(window.userLocationMarker);
+        if (window.userLocationCircle) map.removeLayer(window.userLocationCircle);
+
+        // Tạo marker vị trí người dùng (chấm xanh dương)
+        window.userLocationMarker = L.marker([lat, lng], {
+          icon: L.divIcon({
+            className: 'user-location-marker',
+            html: '<div style="background-color: #4285F4; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);"></div>',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          })
+        }).addTo(map);
+
+        window.userLocationCircle = L.circle([lat, lng], {
+          radius: accuracy,
+          color: '#4285F4',
+          fillColor: '#4285F4',
+          fillOpacity: 0.15,
+          weight: 1
+        }).addTo(map);
+
+        map.flyTo([lat, lng], 16);
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+      },
+      (error) => {
+        console.error(error);
+        let msg = 'Lỗi lấy vị trí.';
+        if (error.code === 1) msg = 'Vui lòng cho phép truy cập vị trí.';
+        else if (error.code === 2) msg = 'Vị trí không khả dụng.';
+        else if (error.code === 3) msg = 'Hết thời gian chờ.';
+        alert(msg);
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   }
 
   function togglePinMode() {
