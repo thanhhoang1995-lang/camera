@@ -813,14 +813,15 @@
       row.innerHTML = `<td>${rowNum++}</td><td>${cam.name}</td><td>${cam.ip}</td><td>${cam.address}</td>
         <td>${cam.lat.toFixed(4)}</td><td>${cam.lng.toFixed(4)}</td>
         <td><span class='${cam.status}'>${cam.status}</span></td>
-        <td><button class='btn btn-sm btn-warning' onclick='event.stopPropagation(); editCamera(${cam.id})'>Sửa</button>
-        <button class='btn btn-sm btn-danger' onclick='event.stopPropagation(); deleteCamera(${cam.id})'>Xóa</button></td>`;
+        <td><button class='btn btn-sm btn-warning' onclick='event.stopPropagation(); editCamera("${cam.id}")'>Sửa</button>
+        <button class='btn btn-sm btn-danger' onclick='event.stopPropagation(); deleteCamera("${cam.id}")'>Xóa</button></td>`;
       tbody.appendChild(row);
     });
   }
 
   function editCamera(id) {
-    const cam = cameras.find(c => c.id === id);
+    // Sử dụng so sánh lỏng (==) để hỗ trợ cả ID số cũ và ID chuỗi mới
+    const cam = cameras.find(c => c.id == id);
     document.getElementById('editId').value = id;
     document.getElementById('editName').value = cam.name;
     document.getElementById('editIP').value = cam.ip;
@@ -832,8 +833,8 @@
   }
 
   function saveEdit() {
-    const id = parseInt(document.getElementById('editId').value);
-    const cam = cameras.find(c => c.id === id);
+    const id = document.getElementById('editId').value;
+    const cam = cameras.find(c => c.id == id);
     cam.name = document.getElementById('editName').value;
     cam.ip = document.getElementById('editIP').value;
     cam.address = document.getElementById('editAddress').value;
@@ -877,7 +878,8 @@
       return;
     }
 
-    const newId = cameras.length ? Math.max(...cameras.map(c => c.id)) + 1 : 1;
+    // Tạo ID duy nhất dựa trên thời gian + chuỗi ngẫu nhiên để tránh trùng lặp khi nhiều người cùng thêm
+    const newId = 'cam_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     cameras.push({ id: newId, name, ip, address, lat, lng, status, updatedAt: Date.now() });
     saveCameras();
 
@@ -900,7 +902,7 @@
 
   function deleteCamera(id) {
     // Xóa mềm (Soft Delete) để đồng bộ được việc xóa
-    const cam = cameras.find(c => c.id === id);
+    const cam = cameras.find(c => c.id == id);
     if (cam) {
       cam.deleted = true;
       cam.updatedAt = Date.now();
@@ -939,12 +941,13 @@
     reader.onload = function(e) {
       const lines = e.target.result.split('\n').slice(1);
       const newCameras = [];
-      const startId = cameras.length ? cameras[cameras.length-1].id + 1 : 1;
       lines.forEach((line, index) => {
         if (line.trim()) {
           const cols = line.split(',').map(col => col.replace(/"/g, '').trim());
           if (cols.length >= 6) {
-            newCameras.push({ id: startId + index, name: cols[0], ip: cols[1], address: cols[2],
+            // Tạo ID duy nhất cho file import
+            const id = 'import_' + Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 5);
+            newCameras.push({ id: id, name: cols[0], ip: cols[1], address: cols[2],
               lat: parseFloat(cols[3]), lng: parseFloat(cols[4]), status: cols[5], updatedAt: Date.now() });
           }
         }
