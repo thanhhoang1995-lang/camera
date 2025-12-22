@@ -161,7 +161,7 @@
           <div class='row mb-2'>
             <div class='col-md-6 col-12'>
               <div class='search-box'>
-                <input type='text' id='searchInput' class='form-control form-control-sm' placeholder='Tìm kiếm...'>
+                <input type='text' id='searchInput' class='form-control form-control-sm' placeholder='Tìm theo địa chỉ hoặc IP...'>
               </div>
             </div>
             <div class='col-md-6 col-12'>
@@ -201,7 +201,7 @@
                 <button class='btn btn-secondary btn-sm' onclick='showSettings()' title='Cài đặt GitHub'>
                   <i class='bi bi-gear'></i> Cài đặt
                 </button>
-                <input type='file' id='importFile' accept='text/csv,.csv' style='display:none;' onchange='importCSV(event)' multiple='false'>
+                <input type='file' id='importFile' accept='text/csv,.csv' style='display:none;' onchange='importCSV(event)'>
               </div>
             </div>
           </div>
@@ -393,14 +393,7 @@
     gistId: 'gist_id'
   };
 
-  // CORS Proxies để hỗ trợ các trình duyệt
-  const CORS_PROXIES = [
-    'https://corsproxy.io/?',
-    'https://api.allorigins.win/raw?url='
-  ];
-
-  let currentProxyIndex = 0;
-  let syncAbortController = null; // Để hủy sync
+  // (Đã loại bỏ CORS proxy và biến sync không sử dụng)
 
   // Tạo fetch với timeout
   function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
@@ -477,7 +470,7 @@
         10000 // 10 giây timeout
       );
 
-      console.log('Response status:', response.status);
+      // Response status logged intentionally removed for cleanliness
 
       if (response.ok) {
         alert('✓ Cài đặt đã được lưu và file cameras.json đã được tạo!');
@@ -710,7 +703,6 @@
             // Hợp nhất thay vì ghi đè khi tải trang
             cameras = mergeCameraLists(cameras, data);
             saveCameras();
-            console.log('✓ Dữ liệu đã được hợp nhất từ GitHub');
           }
         }
       } else if (response.status === 401) {
@@ -737,7 +729,6 @@
     try {
       localStorage.setItem(STORAGE_KEYS.cameras, JSON.stringify(cameras));
       showSaveNotification();
-      console.log('✓ Dữ liệu đã được lưu vào localStorage');
     } catch (error) {
       console.error('Lỗi lưu dữ liệu:', error);
       alert('Không thể lưu dữ liệu. Vui lòng kiểm tra cài đặt trình duyệt của bạn.');
@@ -809,7 +800,7 @@
     let rowNum = 1;
     cameras.filter(cam => {
       if (cam.deleted) return false;
-      const matchesSearch = cam.name.toLowerCase().includes(searchTerm) || cam.ip.toLowerCase().includes(searchTerm);
+      const matchesSearch = cam.address.toLowerCase().includes(searchTerm) || cam.ip.toLowerCase().includes(searchTerm);
       const matchesStatus = (cam.status === 'online' && showOnline) || (cam.status === 'offline' && showOffline);
       return matchesSearch && matchesStatus;
     }).forEach(cam => {
