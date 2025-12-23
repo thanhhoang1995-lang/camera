@@ -40,6 +40,13 @@
     .pin-mode-active { background-color: #ffc107 !important; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    
+    /* Video Viewer Styles */
+    #videoContainer { width: 100%; max-width: 100%; }
+    .video-player { width: 100%; height: auto; border-radius: 8px; margin-bottom: 15px; }
+    .video-info { background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 15px; }
+    .video-url-field { font-size: 0.85rem; word-break: break-all; }
+    .live-indicator { display: inline-block; width: 10px; height: 10px; background: #ff4444; border-radius: 50%; margin-right: 6px; animation: pulse 1.5s infinite; }
 
     /* Mobile Responsive */
     @media (max-width: 768px) {
@@ -260,6 +267,11 @@
             <option value='offline'>Offline</option>
           </select>
         </div>
+        <div class='mb-2'>
+          <label class='form-label small'>Video URL (YouTube Live hoặc URL tùy chỉnh):</label>
+          <input type='text' id='editVideoUrl' class='form-control form-control-sm' placeholder='https://www.youtube.com/watch?v=... hoặc link stream'>
+          <small class='text-muted'>Ví dụ: YouTube Live, RTSP, hoặc HLS stream URL</small>
+        </div>
       </div>
       <div class='modal-footer'>
         <button type='button' class='btn btn-secondary btn-sm' data-bs-dismiss='modal'>Hủy</button>
@@ -308,6 +320,11 @@
             <option value='online'>Online</option>
             <option value='offline'>Offline</option>
           </select>
+        </div>
+        <div class='mb-2'>
+          <label class='form-label small'>Video URL (YouTube Live hoặc URL tùy chỉnh):</label>
+          <input type='text' id='addVideoUrl' class='form-control form-control-sm' placeholder='https://www.youtube.com/watch?v=... hoặc link stream'>
+          <small class='text-muted'>Ví dụ: YouTube Live, RTSP, hoặc HLS stream URL</small>
         </div>
       </div>
       <div class='modal-footer'>
@@ -361,6 +378,36 @@
         <button type='button' class='btn btn-primary btn-sm' onclick='saveGitHubSettings()'>
           <i class='bi bi-check-circle'></i> Lưu
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Video Viewer Modal -->
+<div class='modal fade' id='videoModal' tabindex='-1'>
+  <div class='modal-dialog modal-lg'>
+    <div class='modal-content'>
+      <div class='modal-header bg-danger text-white'>
+        <h5 class='modal-title'><span class='live-indicator'></span><i class='bi bi-camera-video'></i> Xem trực tiếp</h5>
+        <button type='button' class='btn-close btn-close-white' data-bs-dismiss='modal'></button>
+      </div>
+      <div class='modal-body'>
+        <div id='videoContainer'>
+          <div id='videoPlayer' style='margin-bottom: 15px;'></div>
+          <div class='video-info'>
+            <h6 id='videoTitle' style='margin-bottom: 8px;'></h6>
+            <div class='row'>
+              <div class='col-6'>
+                <small class='text-muted'>Video URL:</small>
+                <div class='video-url-field' id='videoUrlDisplay'></div>
+              </div>
+              <div class='col-6'>
+                <small class='text-muted'>Địa chỉ:</small>
+                <div id='videoAddress'></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -744,28 +791,6 @@
     setTimeout(() => notif.remove(), 2000);
   }
 
-  // Hàm xóa dữ liệu từ localStorage
-  function clearStorageData() {
-    if (confirm('Bạn có chắc chắn muốn xóa tất cả dữ liệu camera không?')) {
-      localStorage.removeItem(STORAGE_KEYS.cameras);
-      alert('Dữ liệu đã được xóa.');
-      location.reload();
-    }
-  }
-
-  function generateRandomCameras(total = 200) {
-    const centerLat = 11.9404;
-    const centerLng = 108.4583;
-    const maxDelta = 0.2;
-    for (let i = 1; i <= total; i++) {
-      const lat = centerLat + (Math.random() - 0.5) * maxDelta;
-      const lng = centerLng + (Math.random() - 0.5) * maxDelta;
-      const status = Math.random() > 0.3 ? 'online' : 'offline';
-      const ip = `192.168.${Math.floor((i - 1) / 254)}.${((i - 1) % 254) + 1}`;
-      cameras.push({ id: i, name: `Camera ${i}`, ip, address: `Địa chỉ ${i}`, lat, lng, status });
-    }
-  }
-
   const markers = L.layerGroup();
 
   function updateStats() {
@@ -785,7 +810,10 @@
     cameras.filter(cam => !cam.deleted && ((cam.status === 'online' && showOnline) || (cam.status === 'offline' && showOffline)))
       .forEach(cam => {
         const marker = L.marker([cam.lat, cam.lng], { icon: cam.status === 'online' ? onlineIcon : offlineIcon });
-        marker.bindPopup(`<b>${cam.name}</b><br>${cam.address}`);
+        marker.bindPopup(`<b>${cam.name}</b><br>${cam.address}<br><button class='btn btn-sm btn-danger mt-2' onclick='viewLive("${cam.id}")' style='width:100%;'><i class='bi bi-play-circle'></i> Xem trực tiếp</button>`);
+        marker.on('click', function() {
+          // Khi nhấn vào marker, hiện popup với nút "Xem trực tiếp"
+        });
         markers.addLayer(marker);
       });
     map.addLayer(markers);
@@ -826,6 +854,7 @@
     document.getElementById('editLat').value = cam.lat;
     document.getElementById('editLng').value = cam.lng;
     document.getElementById('editStatus').value = cam.status;
+    document.getElementById('editVideoUrl').value = cam.videoUrl || '';
     new bootstrap.Modal(document.getElementById('editModal')).show();
   }
 
@@ -838,7 +867,9 @@
     cam.lat = parseFloat(document.getElementById('editLat').value);
     cam.lng = parseFloat(document.getElementById('editLng').value);
     cam.status = document.getElementById('editStatus').value;
+    cam.videoUrl = document.getElementById('editVideoUrl').value.trim();
     cam.updatedAt = Date.now(); // Cập nhật thời gian sửa
+    console.log('Camera saved:', cam);
     saveCameras();
     bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
     renderMarkers(); renderTable(); updateStats();
@@ -926,6 +957,7 @@
     const lat = parseFloat(document.getElementById('addLat').value);
     const lng = parseFloat(document.getElementById('addLng').value);
     const status = document.getElementById('addStatus').value;
+    const videoUrl = document.getElementById('addVideoUrl').value.trim();
 
     if (!name || !ip || !address) {
       alert('Vui lòng điền đầy đủ thông tin');
@@ -934,7 +966,9 @@
 
     // Tạo ID duy nhất dựa trên thời gian + chuỗi ngẫu nhiên để tránh trùng lặp khi nhiều người cùng thêm
     const newId = 'cam_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    cameras.push({ id: newId, name, ip, address, lat, lng, status, updatedAt: Date.now() });
+    const newCam = { id: newId, name, ip, address, lat, lng, status, videoUrl, updatedAt: Date.now() };
+    cameras.push(newCam);
+    console.log('New camera added:', newCam);
     saveCameras();
 
     // Reset form
@@ -944,6 +978,7 @@
     document.getElementById('addLat').value = '';
     document.getElementById('addLng').value = '';
     document.getElementById('addStatus').value = 'online';
+    document.getElementById('addVideoUrl').value = '';
 
     bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
     renderMarkers(); renderTable(); updateStats();
@@ -1068,6 +1103,154 @@
       .setLatLng([cam.lat, cam.lng])
       .setContent(`<b>${cam.name}</b><br>${cam.address}`)
       .openOn(map);
+  }
+
+  function convertYouTubeUrl(url) {
+    // Chuyển đổi YouTube URL thành embed URL
+    let videoId = null;
+    
+    // Loại bỏ khoảng trắng
+    url = url.trim();
+    
+    // youtube.com/watch?v=VIDEO_ID
+    if (url.includes('youtube.com/watch')) {
+      const match = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+      videoId = match ? match[1] : null;
+    }
+    // youtu.be/VIDEO_ID
+    else if (url.includes('youtu.be/')) {
+      const match = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+      videoId = match ? match[1] : null;
+    }
+    // youtube.com/embed/VIDEO_ID
+    else if (url.includes('youtube.com/embed')) {
+      const match = url.match(/embed\/([a-zA-Z0-9_-]{11})/);
+      videoId = match ? match[1] : null;
+    }
+    
+    if (videoId) {
+      console.log('YouTube Video ID found:', videoId);
+      return `https://www.youtube.com/embed/${videoId}?autoplay=1&fs=1`;
+    }
+    console.log('Not a YouTube URL or invalid format:', url);
+    return null;
+  }
+
+  function viewLive(camId) {
+    console.log('viewLive called with camId:', camId);
+    const cam = cameras.find(c => c.id == camId);
+    console.log('Camera found:', cam);
+    
+    if (!cam) {
+      alert('Camera không tìm thấy');
+      return;
+    }
+
+    if (!cam.videoUrl || cam.videoUrl.trim() === '') {
+      alert('Camera này chưa có nguồn video. Vui lòng chỉnh sửa camera để thêm video URL.');
+      return;
+    }
+
+    // Cập nhật thông tin
+    document.getElementById('videoTitle').textContent = cam.name;
+    document.getElementById('videoAddress').textContent = cam.address;
+    document.getElementById('videoUrlDisplay').textContent = cam.videoUrl;
+
+    // Xóa player cũ
+    document.getElementById('videoPlayer').innerHTML = '';
+
+    // Kiểm tra xem có phải YouTube URL không
+    const embedUrl = convertYouTubeUrl(cam.videoUrl);
+    if (embedUrl) {
+      // Tạo iframe cho YouTube
+      const iframe = document.createElement('iframe');
+      iframe.className = 'video-player';
+      iframe.src = embedUrl;
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      iframe.style.height = '500px';
+      iframe.style.width = '100%';
+      iframe.style.border = 'none';
+      console.log('YouTube iframe created');
+      document.getElementById('videoPlayer').appendChild(iframe);
+    } else {
+      // Cố gắng tạo video tag cho các loại stream khác (RTSP, HLS, etc.)
+      const video = document.createElement('video');
+      video.className = 'video-player';
+      video.controls = true;
+      video.autoplay = true;
+      video.style.height = '500px';
+      video.style.width = '100%';
+      video.style.backgroundColor = '#000';
+      video.crossOrigin = 'anonymous';
+      
+      // Thử các loại video khác nhau
+      const source = document.createElement('source');
+      
+      // Xác định loại video từ URL
+      if (cam.videoUrl.includes('.m3u8')) {
+        source.type = 'application/x-mpegURL';
+        console.log('HLS stream detected');
+      } else if (cam.videoUrl.includes('.mp4') || cam.videoUrl.includes('mp4')) {
+        source.type = 'video/mp4';
+        console.log('MP4 stream detected');
+      } else if (cam.videoUrl.includes('webm')) {
+        source.type = 'video/webm';
+        console.log('WebM stream detected');
+      } else {
+        // Thử tất cả các loại
+        console.log('Unknown stream type, trying to autodetect');
+      }
+      
+      source.src = cam.videoUrl;
+      video.appendChild(source);
+      
+      const textNode = document.createTextNode('Trình duyệt của bạn không hỗ trợ video HTML5 hoặc URL không hợp lệ.');
+      video.appendChild(textNode);
+      
+      video.onerror = function() {
+        console.error('Video load error:', video.error);
+        alert('Lỗi phát video. Kiểm tra URL video có đúng không?');
+      };
+      
+      document.getElementById('videoPlayer').appendChild(video);
+      
+      // Nếu là HLS stream, cần thêm hls.js library
+      if (cam.videoUrl.includes('.m3u8')) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
+        document.head.appendChild(script);
+        script.onload = function() {
+          console.log('HLS.js loaded');
+          if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+            try {
+              const hls = new Hls();
+              hls.loadSource(cam.videoUrl);
+              hls.attachMedia(video);
+              hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                console.log('HLS stream manifest parsed');
+                video.play();
+              });
+              hls.on(Hls.Events.ERROR, function(event, data) {
+                console.error('HLS error:', data);
+              });
+            } catch (e) {
+              console.error('HLS.js error:', e);
+            }
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            console.log('Using native HLS support');
+            video.src = cam.videoUrl;
+          }
+        };
+        script.onerror = function() {
+          console.error('Failed to load HLS.js');
+        };
+      }
+    }
+
+    // Mở modal
+    const modal = new bootstrap.Modal(document.getElementById('videoModal'));
+    modal.show();
   }
 </script>
 </body>
