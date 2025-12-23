@@ -1136,6 +1136,30 @@
     return null;
   }
 
+  function detectStreamType(url) {
+    // Phát hiện loại stream từ URL
+    url = url.trim().toLowerCase();
+    
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      return 'youtube';
+    } else if (url.includes('.m3u8')) {
+      return 'hls';
+    } else if (url.includes('.mpd')) {
+      return 'dash';
+    } else if (url.includes('.flv')) {
+      return 'flv';
+    } else if (url.includes('rtsp://')) {
+      return 'rtsp';
+    } else if (url.includes('.mjpg') || url.includes('mjpeg')) {
+      return 'mjpeg';
+    } else if (url.includes('.mp4') || url.includes('mp4')) {
+      return 'mp4';
+    } else if (url.includes('.webm')) {
+      return 'webm';
+    }
+    return 'unknown';
+  }
+
   function viewLive(camId) {
     console.log('viewLive called with camId:', camId);
     const cam = cameras.find(c => c.id == camId);
@@ -1159,22 +1183,73 @@
     // Xóa player cũ
     document.getElementById('videoPlayer').innerHTML = '';
 
-    // Kiểm tra xem có phải YouTube URL không
-    const embedUrl = convertYouTubeUrl(cam.videoUrl);
-    if (embedUrl) {
+    const streamType = detectStreamType(cam.videoUrl);
+    console.log('Stream type detected:', streamType);
+
+    if (streamType === 'youtube') {
       // Tạo iframe cho YouTube
-      const iframe = document.createElement('iframe');
-      iframe.className = 'video-player';
-      iframe.src = embedUrl;
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-      iframe.allowFullscreen = true;
-      iframe.style.height = '500px';
-      iframe.style.width = '100%';
-      iframe.style.border = 'none';
-      console.log('YouTube iframe created');
-      document.getElementById('videoPlayer').appendChild(iframe);
+      const embedUrl = convertYouTubeUrl(cam.videoUrl);
+      if (embedUrl) {
+        const iframe = document.createElement('iframe');
+        iframe.className = 'video-player';
+        iframe.src = embedUrl;
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+        iframe.allowFullscreen = true;
+        iframe.style.height = '500px';
+        iframe.style.width = '100%';
+        iframe.style.border = 'none';
+        console.log('YouTube iframe created');
+        document.getElementById('videoPlayer').appendChild(iframe);
+      }
+    } else if (streamType === 'mjpeg') {
+      // Tạo img tag cho MJPEG stream
+      const img = document.createElement('img');
+      img.src = cam.videoUrl;
+      img.className = 'video-player';
+      img.style.width = '100%';
+      img.style.height = '500px';
+      img.style.objectFit = 'contain';
+      img.style.backgroundColor = '#000';
+      img.onerror = function() {
+        console.error('MJPEG image load error');
+        alert('Lỗi tải stream MJPEG. Kiểm tra URL có đúng không?');
+      };
+      console.log('MJPEG player created');
+      document.getElementById('videoPlayer').appendChild(img);
+    } else if (streamType === 'rtsp') {
+      // RTSP - cần transcode hoặc WebSocket proxy
+      const helpDiv = document.createElement('div');
+      helpDiv.style.cssText = 'background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;';
+      helpDiv.innerHTML = `
+        <h6 style='margin-top: 0; color: #856404;'><i class='bi bi-exclamation-triangle'></i> RTSP Stream không hỗ trợ trực tiếp</h6>
+        <p style='margin: 10px 0; color: #856404; font-size: 0.9rem;'>
+          Trình duyệt không thể phát RTSP trực tiếp. Hãy thử một trong những cách sau:
+        </p>
+        <ul style='margin: 10px 0; padding-left: 20px; color: #856404; font-size: 0.85rem;'>
+          <li><strong>Cách 1:</strong> Thay RTSP bằng URL MJPEG của camera (thường là <code>http://admin:admin@IP:80/mjpeg</code>)</li>
+          <li><strong>Cách 2:</strong> Sử dụng một proxy server (FFmpeg, nginx-rtmp)</li>
+          <li><strong>Cách 3:</strong> Chuyển RTSP thành HLS hoặc DASH stream</li>
+        </ul>
+        <div style='margin-top: 15px;'>
+          <p style='margin: 5px 0; color: #856404; font-size: 0.85rem;'><strong>Camera của bạn:</strong></p>
+          <code style='background: #fff; padding: 8px; border-radius: 4px; display: block; word-break: break-all; font-size: 0.8rem;'>${cam.videoUrl}</code>
+        </div>
+      `;
+      document.getElementById('videoPlayer').appendChild(helpDiv);
+      
+      // Tạo input để người dùng chỉnh sửa URL
+      const updateDiv = document.createElement('div');
+      updateDiv.style.cssText = 'margin-top: 15px; padding: 12px; background: #e7f3ff; border-radius: 8px;';
+      updateDiv.innerHTML = `
+        <small style='color: #004085;'><strong>Hoặc nhập URL MJPEG để thay thế:</strong></small><br>
+        <input type='text' id='mjpegUrlInput' class='form-control form-control-sm mt-2' placeholder='http://admin:admin@IP:80/mjpeg' style='font-size: 0.8rem;'>
+        <button class='btn btn-sm btn-primary mt-2' onclick='updateCameraVideoUrl("${cam.id}", document.getElementById("mjpegUrlInput").value)' style='width: 100%;'>
+          Cập nhật và phát
+        </button>
+      `;
+      document.getElementById('videoPlayer').appendChild(updateDiv);
     } else {
-      // Cố gắng tạo video tag cho các loại stream khác (RTSP, HLS, etc.)
+      // Cố gắng tạo video tag cho các loại stream khác (HLS, DASH, MP4, WebM, FLV, etc.)
       const video = document.createElement('video');
       video.className = 'video-player';
       video.controls = true;
@@ -1188,18 +1263,21 @@
       const source = document.createElement('source');
       
       // Xác định loại video từ URL
-      if (cam.videoUrl.includes('.m3u8')) {
+      if (streamType === 'hls') {
         source.type = 'application/x-mpegURL';
         console.log('HLS stream detected');
-      } else if (cam.videoUrl.includes('.mp4') || cam.videoUrl.includes('mp4')) {
+      } else if (streamType === 'dash') {
+        source.type = 'application/dash+xml';
+        console.log('DASH stream detected');
+      } else if (streamType === 'mp4') {
         source.type = 'video/mp4';
         console.log('MP4 stream detected');
-      } else if (cam.videoUrl.includes('webm')) {
+      } else if (streamType === 'webm') {
         source.type = 'video/webm';
         console.log('WebM stream detected');
       } else {
-        // Thử tất cả các loại
-        console.log('Unknown stream type, trying to autodetect');
+        source.type = 'video/mp4'; // Mặc định là mp4
+        console.log('Unknown stream type, defaulting to mp4');
       }
       
       source.src = cam.videoUrl;
@@ -1216,7 +1294,7 @@
       document.getElementById('videoPlayer').appendChild(video);
       
       // Nếu là HLS stream, cần thêm hls.js library
-      if (cam.videoUrl.includes('.m3u8')) {
+      if (streamType === 'hls') {
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
         document.head.appendChild(script);
@@ -1246,11 +1324,48 @@
           console.error('Failed to load HLS.js');
         };
       }
+      // Nếu là DASH stream, cần thêm dash.js library
+      else if (streamType === 'dash') {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.dashjs.org/latest/dash.all.min.js';
+        document.head.appendChild(script);
+        script.onload = function() {
+          console.log('Dash.js loaded');
+          if (typeof dashjs !== 'undefined') {
+            try {
+              const player = dashjs.MediaPlayer().create();
+              player.initialize(video, cam.videoUrl, true);
+            } catch (e) {
+              console.error('Dash.js error:', e);
+            }
+          }
+        };
+        script.onerror = function() {
+          console.error('Failed to load Dash.js');
+        };
+      }
     }
 
     // Mở modal
     const modal = new bootstrap.Modal(document.getElementById('videoModal'));
     modal.show();
+  }
+
+  function updateCameraVideoUrl(camId, newUrl) {
+    if (!newUrl || newUrl.trim() === '') {
+      alert('Vui lòng nhập URL');
+      return;
+    }
+    
+    const cam = cameras.find(c => c.id == camId);
+    if (cam) {
+      cam.videoUrl = newUrl.trim();
+      cam.updatedAt = Date.now();
+      saveCameras();
+      console.log('Camera video URL updated:', cam);
+      // Reload video player
+      viewLive(camId);
+    }
   }
 </script>
 </body>
